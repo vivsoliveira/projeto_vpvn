@@ -23,38 +23,42 @@
             <label class="radio-label"><input id="tipoDescontoInverso" type="radio" name="tipoDesconto" value="desconto_inverso" /> Inverso</label>
             <div id="modeBadge" class="mode-badge">Modo: Desconto</div>
           </div>
-          <div class="help-inline" id="modeHelp">No modo <strong>Desconto</strong> você informa <em>VF</em> e vê o <em>PV</em>.</div>
+          <div class="help-inline" id="modeHelp">
+            No modo <strong>Desconto</strong> você informa o <strong>VP (valor nominal do cheque)</strong> e vê o <strong>PV (valor presente após desconto)</strong>.
+            <br>
+            No modo <strong>Inverso</strong> você informa o <strong>VF (valor futuro / recebido na data)</strong> e o sistema calcula o <strong>VP</strong>.
+          </div>
         </div>
       </div>
 
       <div class="campo">
         <label for="valor">Valor total (R$)</label>
         <input id="valor" name="valor" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00" required />
-        <div class="helper">Valor total da carteira (usado para preencher automaticamente os valores das parcelas se deixados vazios).</div>
+        <div class="helper">Valor total da carteira. Se os valores das parcelas forem deixados em branco, o sistema divide este valor igualmente entre as parcelas.</div>
       </div>
 
       <div class="campo">
         <label for="taxa">Taxa mensal (%)</label>
-        <input id="taxa" name="taxa" type="number" step="0.01" min="0" placeholder="Ex.: 1.00" required />
-        <div class="helper">Taxa **mensal** (ex.: 1 = 1% ao mês). Cálculos usam capitalização simples, convertendo dias úteis em fração de mês (21 dias úteis/mês).</div>
+        <input id="taxa" name="taxa" type="number" step="0.01" min="0" placeholder="Ex.: 3.50" required />
+        <div class="helper">Taxa <strong>mensal</strong> em percentagem (ex.: <code>3.5</code> = 3.5% ao mês). Os cálculos usam <strong>desconto simples</strong> com base de <strong>30 dias por mês</strong>.</div>
       </div>
 
       <div class="campo">
         <label for="dataOperacao">Data da operação (D0)</label>
         <input id="dataOperacao" name="dataOperacao" type="date" required />
-        <div class="helper">Data em que a operação foi realizada (D0)</div>
+        <div class="helper">Data em que a operação foi realizada (D0). As datas das parcelas são comparadas com D0 para calcular os dias corridos.</div>
       </div>
 
       <div class="campo">
         <label for="dataVencimento">Data de vencimento (maturidade)</label>
         <input id="dataVencimento" name="dataVencimento" type="date" required />
-        <div class="helper">Data em que a operação vence (final). Será atualizada automaticamente para a última parcela quando apropriado.</div>
+        <div class="helper">Data em que a operação vence (será atualizada automaticamente para a data da última parcela).</div>
       </div>
 
       <div class="campo">
         <label for="parcelas">Quantidade de parcelas</label>
         <select id="parcelas" name="parcelas" required></select>
-        <div class="helper">Escolha o número de parcelas (1 a 60). Após isso, você pode preencher datas e valores das parcelas abaixo (opcional).</div>
+        <div class="helper">Escolha o número de parcelas (1 a 60). Se você não preencher uma data de parcela, o sistema usará D0 + 30/60/90... dias corridos como padrão. Se a data cair em fim de semana, será ajustada para a próxima segunda-feira.</div>
       </div>
 
       <div id="parcelasDatas" class="full" aria-live="polite">
@@ -67,20 +71,32 @@
           </div>
         </div>
         <div id="parcelasLista"></div>
-        <div class="small-note">Rótulo da segunda coluna muda com o modo. Em <strong>Desconto</strong> a segunda coluna é <em>VF (nominal)</em>. Em <strong>Inverso</strong> é <em>VP (recebido hoje)</em>.</div>
+        <div class="small-note">
+          Rótulo da segunda coluna muda conforme o modo:
+          <ul>
+            <li><strong>Desconto:</strong> a coluna de entrada é <em>VP (valor nominal do cheque)</em> e a coluna de resultado mostra <em>PV (valor presente)</em>, calculado por desconto simples:</li>
+          </ul>
+          <pre style="margin:6px 0;padding:8px;background:#fafafa;border-radius:6px;border:1px solid #eef2ff;">
+PV = VP − (taxa% × dias × VP) / (30 × 100)
+          </pre>
+          <ul>
+            <li><strong>Inverso:</strong> a coluna de entrada é <em>VF (valor futuro)</em> e o resultado mostra o <em>VP</em> equivalente, aplicando o mesmo desconto simples sobre o VF.</li>
+          </ul>
+          Observação: usamos **30 dias/mês** como base para a fração de mês (dias corridos / 30).
+        </div>
       </div>
 
       <div class="prazo-box" aria-live="polite" id="prazoBox">
         <div class="prazo-item">
-          <b>Prazo total (dias úteis)</b>
-          <div class="prazo-value" id="prazoTotal">— dias úteis</div>
+          <b>Prazo total (dias corridos)</b>
+          <div class="prazo-value" id="prazoTotal">— dias</div>
         </div>
         <div class="prazo-item">
-          <b>Prazo médio (dias úteis)</b>
-          <div class="prazo-value" id="prazoMedio">— dias úteis</div>
+          <b>Prazo médio (dias corridos)</b>
+          <div class="prazo-value" id="prazoMedio">— dias</div>
         </div>
         <div class="prazo-item min240">
-          <div class="helper" id="baseCalc">Usa datas das parcelas quando fornecidas; senão, usa 30/60/90... dias úteis desde D0. Base: 21 dias úteis/mês (cap. simples).</div>
+          <div class="helper" id="baseCalc">Cálculos usam as datas das parcelas quando fornecidas; senão, serão usadas D0 + 30/60/90... dias corridos. Se a parcela cair no fim de semana, ela é ajustada para a próxima segunda-feira.</div>
         </div>
       </div>
 
