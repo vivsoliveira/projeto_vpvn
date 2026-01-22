@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword123
+      MYSQL_DATABASE: db
+      MYSQL_USER: trust
+      MYSQL_PASSWORD: rootpassword123
+    volumes:
+      - db_data:/var/lib/mysql
+
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: trust
+      DB_PASS: rootpassword123
+      DB_NAME: db
+      DB_CONN_LIMIT: 10
+      CORS_ORIGIN: http://127.0.0.1:5500
+      RATE_LIMIT_MAX: 60
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+
+volumes:
+  db_data:

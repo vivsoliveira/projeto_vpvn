@@ -165,12 +165,55 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnClearDates').addEventListener('click', clearParcelDates);
   document.getElementById('btnFillValues').addEventListener('click', fillDefaultParcelValues);
   document.getElementById('btnReset').addEventListener('click', resetForm);
-
-  document.getElementById('operacaoForm').addEventListener('submit', (e) => {
+  document.getElementById('operacaoForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    alert('Operação pronta (veja console).');
-    console.log('debug parcelas:', obterParcelasCompletas());
-  });
+
+    const nomeSocial = document.getElementById('nomeSocial').value.trim();
+    if(!nomeSocial){
+      alert('Preencha o Nome social.');
+      return;
+    }
+
+    // montar o objeto que quer salvar: incluí campos do formulário + parcelas calculadas
+    const parcelas = obterParcelasCompletas();
+    const payload = {
+      nomeSocial,
+      modo: getModo(),
+      valorTotal: parseUserNumber(document.getElementById('valor').value) || 0,
+      taxaMensalPct: parseUserNumber(document.getElementById('taxa').value) || 0,
+      dataOperacao: document.getElementById('dataOperacao').value,
+      dataVencimento: document.getElementById('dataVencimento').value,
+      parcelas,
+      resumo: {
+        somaNominal: document.getElementById('sumNominal').textContent,
+        somaCalculado: document.getElementById('sumCalculado').textContent
+      }
+    };
+
+    try {
+      const resp = await fetch('http://localhost:3000/api/operacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(()=>({ error: 'Erro desconhecido'}));
+        alert('Erro ao salvar operação: ' + (err.error || resp.statusText));
+        return;
+      }
+
+      const body = await resp.json();
+      alert('Operação salva! id = ' + body.id);
+      console.log('Operação salva:', body, payload);
+      // opcional: redirecionar ou limpar formulário
+      // resetForm();
+    } catch (err) {
+      console.error('Falha ao chamar API:', err);
+      alert('Falha de rede ao salvar. Verifique se a API está rodando em http://localhost:3000');
+    }
+});
+
 });
 
 function rebuildParcelInputs(){
