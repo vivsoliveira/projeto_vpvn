@@ -50,3 +50,162 @@ button.secondary{background:transparent;color:#374151;border:1px solid #e5e7eb}
 .min240{min-width:240px}
 .radio-label{font-weight:700}
 .mode-controls{display:flex;gap:8px;align-items:center}
+
+.save-modal{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(2,6,23,0.45);
+  z-index:9999;
+  padding:20px;
+}
+.save-modal[hidden]{ display:none; }
+.save-modal__panel{
+  width:100%;
+  max-width:520px;
+  background:var(--card);
+  border-radius:14px;
+  padding:28px 26px;
+  box-shadow:0 20px 60px rgba(2,6,23,0.4);
+  text-align:center;
+  position:relative;
+}
+.save-modal__panel h2{
+  margin:0 0 8px 0;
+  font-size:1.35rem;
+  color:#071033;
+}
+.save-modal__subtitle{
+  margin:0 0 18px 0;
+  color:var(--muted);
+  font-size:0.98rem;
+}
+.save-modal__actions{
+  display:flex;
+  gap:12px;
+  justify-content:center;
+  margin-top:8px;
+  flex-wrap:wrap;
+}
+.save-modal__close{
+  position:absolute;
+  right:12px;
+  top:12px;
+  border:none;
+  background:transparent;
+  font-size:1.0rem;
+  cursor:pointer;
+  color:var(--muted);
+  padding:6px;
+  border-radius:8px;
+}
+.save-modal .btn{ min-width:180px; padding:10px 14px; border-radius:10px; font-weight:700; }
+.save-modal .btn.secondary{ background:transparent; color:#374151; border:1px solid #e5e7eb; }
+
+/* foco e acessibilidade */
+.save-modal__panel:focus { outline: none; }
+@media(max-width:420px){
+  .save-modal__panel{ padding:18px; }
+  .save-modal .btn{ min-width:140px; font-size:0.95rem; }
+}
+
+
+/* HISTÓRICO - estilos globais (cole no final do style.css) */
+.hist-wrapper { max-width:1100px; margin:32px auto; padding:28px; background:#fff; border-radius:14px; box-shadow:0 10px 30px rgba(16,24,40,0.06); }
+.hist-top { display:flex; align-items:center; gap:14px; margin-bottom:8px; flex-wrap:wrap; }
+.hist-title { margin:0; font-size:1.2rem; font-weight:800; color:#071033; }
+.hist-sub { margin:0 0 12px 0; color:#6b7280; }
+
+/* Back buttons - default blue primary */
+.back { display:inline-flex; align-items:center; gap:8px; text-decoration:none; background:var(--accent); color:white; border-radius:10px; padding:8px 12px; font-weight:700; border:1px solid rgba(19,102,214,0.15); cursor:pointer; }
+.back.secondary { background:transparent; color:#071033; border:1px solid #e7eefc; font-weight:700; padding:8px 12px; border-radius:10px; }
+
+/* table */
+.hist-table-wrap { overflow:auto; border-radius:10px; border:1px solid #eef2ff; margin-top:12px; }
+table#histTable { width:100%; border-collapse:collapse; min-width:760px; }
+table#histTable thead th { text-align:left; padding:12px 16px; background:#fbfbff; position:sticky; top:0; z-index:2; font-weight:700; color:#071033; }
+table#histTable tbody td { padding:14px 16px; border-top:1px solid #f3f6fb; color:#0b1220; }
+table#histTable tbody tr:hover td { background:#fcfdff; }
+table#histTable tfoot td { padding:12px 16px; background:#f8fafc; font-weight:800; }
+
+.muted { color:#6b7280; }
+.empty { padding:32px; text-align:center; color:#6b7280; }
+
+@media (max-width:720px) {
+  .hist-wrapper { padding:16px; margin:18px; }
+  table#histTable thead th, table#histTable tbody td { padding:10px 8px; }
+}
+
+/* ===== Detalhes da operação (painel inferior) ===== */
+.op-card {
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #e8eefc;
+  box-shadow: 0 8px 24px rgba(16,24,40,0.06);
+}
+
+.op-card h3 {
+  margin: 0 0 6px 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #071033;
+}
+
+.op-card .muted {
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
+.op-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.op-card th {
+  text-align: left;
+  padding: 10px 12px;
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+.op-card td {
+  padding: 10px 12px;
+  border-top: 1px solid #eef2ff;
+}
+
+.op-card tr.overdue td {
+  color: #c02626;
+  font-weight: 700;
+}
+
+.op-card .actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* garantir que o dropdown posicione-se abaixo do input #nomeSocial */
+.flex1 {
+  position: relative; /* necessário para o dropdown absolute se posicionar corretamente */
+}
+
+/* ajuste fino do dropdown para ocupar a largura do input e ficar legível */
+#clientsDropdown {
+  left: 0;
+  right: auto;
+  width: calc(100% - 8px); /* um pequeno padding visual */
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+/* estilo das sugestões (melhora legibilidade) */
+#clientsDropdown { background:#0b1220; color:#fff; max-height:240px; overflow:auto; box-shadow:0 12px 30px rgba(2,6,23,0.25); }
+#clientsDropdown .client-suggestion { padding:10px 12px; border-radius:6px; cursor:pointer; font-weight:700; color:#fff; }
+#clientsDropdown .client-suggestion:hover,
+#clientsDropdown .client-suggestion.active { background:rgba(255,255,255,0.04); }
+#clientsDropdown .no-results { padding:10px 12px; color:#cbd5e1; font-weight:600; }

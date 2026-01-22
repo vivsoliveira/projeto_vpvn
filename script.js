@@ -1,5 +1,5 @@
-// script.js — VERSÃO CORRIGIDA
-// Objetivo: implementar corretamente desconto simples e parsing numérico robusto
+// script.js — VERSÃO COM MODAL DE CONFIRMAÇÃO
+// (mantive suas utilidades financeiras e funções originais e adicionei modal)
 
 function dateFromIsoUTC(isoStr){
   return new Date(isoStr + 'T00:00:00Z');
@@ -39,29 +39,20 @@ function adjustToNextBusinessDay(iso){
   return isoFromDateUTC(d);
 }
 
-// ===== FINANÇAS (taxa mensal, base 30 dias) =====
 const DAYS_PER_MONTH = 30;
-
-// desconto simples (valor absoluto)
-// desconto = (taxaPercent * dias * valor) / (30 * 100)
 function descontoSimples(taxaMensalPct, diasCorridos, valor){
   const taxa = Number(taxaMensalPct) || 0;
   const dias = Number(diasCorridos) || 0;
   const v = Number(valor) || 0;
   return (taxa * dias * v) / (DAYS_PER_MONTH * 100);
 }
-
-// PV a partir de VP "nominal de entrada" (desconto simples subtrativo)
 function pvFromVp(vpEntrada, taxaMensalPct, diasCorridos){
   return Number(vpEntrada || 0) - descontoSimples(taxaMensalPct, diasCorridos, vpEntrada);
 }
-
-// VP a partir de VF (modo inverso): aplicar desconto simples sobre VF para obter VP
 function vpFromVf(vfEntrada, taxaMensalPct, diasCorridos){
   return Number(vfEntrada || 0) - descontoSimples(taxaMensalPct, diasCorridos, vfEntrada);
 }
 
-// ===== utilitários de número/currency =====
 function parseUserNumber(str){
   if(str === null || str === undefined) return NaN;
   if(typeof str === 'number') return str;
@@ -73,21 +64,15 @@ function parseUserNumber(str){
 
   let normalized = s;
 
-  // Caso: tem pontos E vírgula -> assumir ponto = separador de milhar, vírgula = decimal (pt-BR)
   if(hasDot && hasComma){
     normalized = s.replace(/\./g, '').replace(',', '.');
   } else if(hasComma && !hasDot){
-    // apenas vírgula -> decimal
     normalized = s.replace(',', '.');
   } else {
-    // apenas ponto (ou nenhum) -> assumir ponto como decimal (ex: "3.5" => 3.5)
-    // Mas também remover espaços e símbolos de moeda
     normalized = s;
   }
 
-  // remover qualquer caractere que não seja dígito, sinal ou ponto decimal
   normalized = normalized.replace(/[^\d\.\-]/g, '');
-
   const n = Number(normalized);
   return Number.isFinite(n) ? n : NaN;
 }
@@ -119,6 +104,7 @@ function getModo(){
   return checked ? checked.value : 'desconto';
 }
 
+/* ---------- DOM ready ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   // popula select de parcelas
   const sel = document.getElementById('parcelas');
@@ -152,10 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
     r.addEventListener('change', () => {
       const modo = getModo();
       document.getElementById('modeBadge').textContent = modo === 'desconto' ? 'Modo: Desconto' : 'Modo: Inverso';
-      document.getElementById('modeHelp').innerHTML =
-        (modo === 'desconto')
-          ? 'No modo <strong>Desconto</strong> o sistema divide o <strong>Valor total</strong> em parcelas (VP) e mostra o <strong>PV descontado</strong>.'
-          : 'No modo <strong>Inverso</strong> você informa <strong>VF</strong> e vê o <strong>VP</strong>.';
       updateParcelValueLabels();
       atualizarTudo();
     });
@@ -165,56 +147,26 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnClearDates').addEventListener('click', clearParcelDates);
   document.getElementById('btnFillValues').addEventListener('click', fillDefaultParcelValues);
   document.getElementById('btnReset').addEventListener('click', resetForm);
-  document.getElementById('operacaoForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
+  document.getElementById('operacaoForm').addEventListener('submit', handleSubmit);
 
-    const nomeSocial = document.getElementById('nomeSocial').value.trim();
-    if(!nomeSocial){
-      alert('Preencha o Nome social.');
-      return;
+  // modal buttons
+  const btnNewOp = document.getElementById('btnNewOp');
+  const btnViewHistory = document.getElementById('btnViewHistory');
+  const btnCloseModal = document.getElementById('btnCloseModal');
+  if(btnNewOp) btnNewOp.addEventListener('click', () => { hideSaveModal(); resetForm(); focusNomeSocial(); });
+  if(btnViewHistory) btnViewHistory.addEventListener('click', () => { window.location.href = 'historico.html'; });
+  if(btnCloseModal) btnCloseModal.addEventListener('click', hideSaveModal);
+
+  // Escape to close modal
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') {
+      const modal = document.getElementById('saveModal');
+      if(modal && !modal.hasAttribute('hidden')) hideSaveModal();
     }
-
-    // montar o objeto que quer salvar: incluí campos do formulário + parcelas calculadas
-    const parcelas = obterParcelasCompletas();
-    const payload = {
-      nomeSocial,
-      modo: getModo(),
-      valorTotal: parseUserNumber(document.getElementById('valor').value) || 0,
-      taxaMensalPct: parseUserNumber(document.getElementById('taxa').value) || 0,
-      dataOperacao: document.getElementById('dataOperacao').value,
-      dataVencimento: document.getElementById('dataVencimento').value,
-      parcelas,
-      resumo: {
-        somaNominal: document.getElementById('sumNominal').textContent,
-        somaCalculado: document.getElementById('sumCalculado').textContent
-      }
-    };
-
-    try {
-      const resp = await fetch('http://localhost:3000/api/operacoes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(()=>({ error: 'Erro desconhecido'}));
-        alert('Erro ao salvar operação: ' + (err.error || resp.statusText));
-        return;
-      }
-
-      const body = await resp.json();
-      console.log('Operação salva:', body, payload);
-      // opcional: redirecionar ou limpar formulário
-      // resetForm();
-    } catch (err) {
-      console.error('Falha ao chamar API:', err);
-      alert('Falha de rede ao salvar. Verifique se a API está rodando em http://localhost:3000');
-    }
+  });
 });
 
-});
-
+/* ---------- form / parcels ---------- */
 function rebuildParcelInputs(){
   const n = parseInt(document.getElementById('parcelas').value || '1',10) || 1;
   const lista = document.getElementById('parcelasLista');
@@ -358,9 +310,6 @@ function obterParcelasCompletas(){
       entrada = share; // divide igual se vazio
     }
 
-    // Resultado:
-    // - desconto: entrada = VP => mostra PV descontado (usando desconto simples subtrativo)
-    // - inverso: entrada = VF => mostra VP (aplica desconto simples sobre VF)
     const pvRaw = (modo === 'desconto')
       ? pvFromVp(entrada, taxa, dias)
       : vpFromVf(entrada, taxa, dias);
@@ -379,7 +328,6 @@ function atualizarTudo(){
   const modo = getModo();
   const parcelas = obterParcelasCompletas().sort((a,b)=>a.data.localeCompare(b.data));
 
-  // prazo total e médio
   const ultima = parcelas.length ? parcelas[parcelas.length-1].data : null;
   const prazoTotal = ultima ? calendarDaysBetween(d0, ultima) : NaN;
   const prazoMedio = parcelas.length ? parcelas.reduce((s,p)=>s+p.dias,0) / parcelas.length : NaN;
@@ -387,26 +335,22 @@ function atualizarTudo(){
   document.getElementById('prazoTotal').textContent = Number.isNaN(prazoTotal) ? '—' : `${round2(prazoTotal)} dias`;
   document.getElementById('prazoMedio').textContent = Number.isNaN(prazoMedio) ? '—' : `${round2(prazoMedio)} dias`;
 
-  // soma entrada e soma PV
   const sumEntrada = round2(parcelas.reduce((s,p)=>s+p.entrada,0));
   const sumPV = round2(parcelas.reduce((s,p)=>s+p.pv,0));
 
   document.getElementById('sumNominal').textContent = 'R$ ' + formatCurrencyNumber(sumEntrada);
   document.getElementById('sumCalculado').textContent = 'R$ ' + formatCurrencyNumber(sumPV);
 
-  // escreve resultados por parcela
   for(const p of parcelas){
     const resEl = document.getElementById('parcelaRes' + p.index);
     const label = (modo === 'desconto') ? 'PV' : 'VP';
     resEl.textContent = `${label}: R$ ${formatCurrencyNumber(p.pv)} — (dias corridos: ${p.dias})`;
   }
 
-  // atualiza vencimento para última parcela
   if(ultima){
     document.getElementById('dataVencimento').value = ultima;
   }
 
-  // status simples
   const total = parseUserNumber(document.getElementById('valor').value) || 0;
   const diff = round2(total - sumEntrada);
 
@@ -432,3 +376,285 @@ function resetForm(){
   rebuildParcelInputs();
   atualizarTudo();
 }
+
+function focusNomeSocial(){
+  const el = document.getElementById('nomeSocial');
+  if(el){ el.focus(); }
+}
+
+/* ---------- submit + modal (substituir handleSubmit atual) ---------- */
+async function handleSubmit(e){
+  e.preventDefault();
+
+  const nomeSocial = document.getElementById('nomeSocial').value.trim();
+  if(!nomeSocial){
+    alert('Preencha o Nome social.');
+    return;
+  }
+
+  const parcelas = obterParcelasCompletas();
+  const payload = {
+    nomeSocial,
+    modo: getModo(),
+    valorTotal: parseUserNumber(document.getElementById('valor').value) || 0,
+    taxaMensalPct: parseUserNumber(document.getElementById('taxa').value) || 0,
+    dataOperacao: document.getElementById('dataOperacao').value,
+    dataVencimento: document.getElementById('dataVencimento').value,
+    parcelas,
+    resumo: {
+      somaNominal: document.getElementById('sumNominal').textContent,
+      somaCalculado: document.getElementById('sumCalculado').textContent
+    },
+    // marca temporal local (útil para o histórico local)
+    _savedAt_local: new Date().toISOString()
+  };
+
+  // grava localmente (sempre). Mantemos formato de array em localStorage.operacoes
+  try {
+    const raw = localStorage.getItem('operacoes') || '[]';
+    const arr = JSON.parse(raw);
+    if(Array.isArray(arr)){
+      // gerar id local se não houver id do backend
+      const localId = 'local-' + (Date.now()) + '-' + Math.floor(Math.random()*9000+1000);
+      const toSave = Object.assign({ id: localId }, payload);
+      arr.push(toSave);
+      localStorage.setItem('operacoes', JSON.stringify(arr));
+    } else {
+      localStorage.setItem('operacoes', JSON.stringify([ payload ]));
+    }
+  } catch (err) {
+    console.warn('Não foi possível gravar localmente:', err);
+  }
+
+  // garantir que o cliente seja incluído na lista de clientes (autocomplete)
+  try {
+    // adiciona em localStorage.clientes (mantido por autocomplete)
+    const craw = localStorage.getItem('clientes') || '[]';
+    const clients = JSON.parse(craw);
+    const normalized = (nomeSocial || '').trim();
+    if(Array.isArray(clients)){
+      if(!clients.includes(normalized)){
+        clients.push(normalized);
+        clients.sort((a,b)=> a.localeCompare(b,'pt-BR'));
+        localStorage.setItem('clientes', JSON.stringify(clients));
+      }
+    } else {
+      localStorage.setItem('clientes', JSON.stringify([normalized]));
+    }
+    // notificar script de autocomplete (se existir)
+    if(typeof window.refreshClientesAutocomplete === 'function') window.refreshClientesAutocomplete();
+  } catch(ex){
+    console.warn('Erro ao atualizar lista de clientes:', ex);
+  }
+
+  // tentar enviar ao backend — se der erro, já temos o registro local como fallback
+  try {
+    const resp = await fetch('http://localhost:3000/api/operacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resp.ok) {
+      // backend respondeu erro — mantemos registro local e avisamos o usuário
+      const err = await resp.json().catch(()=>({ error: 'Erro desconhecido' }));
+      console.warn('API retornou erro ao salvar (gravado localmente):', err);
+      showSaveModal(); // mostramos modal mesmo assim (registro está salvo localmente)
+      return;
+    }
+
+    const body = await resp.json();
+    console.log('Operação salva no backend:', body, payload);
+
+    // opcional: atualizar o registro local com o id retornado pelo backend (se existir)
+    try {
+      const raw2 = localStorage.getItem('operacoes') || '[]';
+      const arr2 = JSON.parse(raw2);
+      if(Array.isArray(arr2)){
+        // caso backend retorne id, associe o corpo salvo localmente ao id do backend
+        if(body && (body.id || body._id)){
+          // localizar pelo timestamp ou pelo nome+data
+          const match = arr2.findIndex(o => o._savedAt_local === payload._savedAt_local && (o.nomeSocial === payload.nomeSocial));
+          if(match >= 0){
+            arr2[match] = Object.assign({}, arr2[match], body);
+            localStorage.setItem('operacoes', JSON.stringify(arr2));
+          } else {
+            // se não achar, opcionalmente adicionar o body retornado
+            arr2.push(Object.assign({}, body, { _savedAt_local: payload._savedAt_local }));
+            localStorage.setItem('operacoes', JSON.stringify(arr2));
+          }
+        }
+      }
+    } catch(errUpdate){
+      console.warn('Erro ao tentar sincronizar id do backend para localStorage:', errUpdate);
+    }
+
+    // mostrar modal
+    showSaveModal();
+
+  } catch (err) {
+    console.error('Falha ao chamar API (gravado localmente):', err);
+    // já gravamos localmente — apenas informar e abrir modal
+    alert('API inacessível — operação salva localmente e aparecerá no histórico offline.');
+    showSaveModal();
+  }
+}
+
+
+/* ---------- modal helpers ---------- */
+function showSaveModal(){
+  const modal = document.getElementById('saveModal');
+  if(!modal) return;
+  modal.removeAttribute('hidden');
+  // mover foco para o primeiro botão
+  const btn = document.getElementById('btnNewOp') || modal.querySelector('button');
+  if(btn) btn.focus();
+  // impedir scroll por baixo
+  document.documentElement.style.overflow = 'hidden';
+}
+function hideSaveModal(){
+  const modal = document.getElementById('saveModal');
+  if(!modal) return;
+  modal.setAttribute('hidden', 'true');
+  document.documentElement.style.overflow = '';
+}
+
+// AUTOCOMPLETE adaptado para usar #nomeSocial (cole no final de script.js)
+(function(){
+  const INPUT_ID = 'nomeSocial';
+  const DROP_ID = 'clientsDropdown';
+  const LS_CLIENTES = 'clientes';
+  const LS_OPERACOES = 'operacoes';
+
+  function getFromLocalStorageJSON(key){ try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e){ return null; } }
+  function saveToLocalStorageJSON(key, value){ try { localStorage.setItem(key, JSON.stringify(value)); } catch(e){} }
+
+  function extractNamesFromOperacoes(){
+    const ops = getFromLocalStorageJSON(LS_OPERACOES);
+    if(!Array.isArray(ops)) return [];
+    const set = new Set();
+    ops.forEach(o => {
+      const n = (o && (o.nomeSocial || o.nome_social)) || null;
+      if(n && String(n).trim()) set.add(String(n).trim());
+    });
+    return Array.from(set);
+  }
+
+  function loadClientes(){
+    let clientes = getFromLocalStorageJSON(LS_CLIENTES) || [];
+    if(!Array.isArray(clientes) || clientes.length === 0){
+      clientes = extractNamesFromOperacoes();
+      saveToLocalStorageJSON(LS_CLIENTES, clientes);
+    }
+    clientes = Array.from(new Set(clientes.map(c => String(c).trim()).filter(Boolean)));
+    clientes.sort((a,b)=> a.localeCompare(b,'pt-BR'));
+    return clientes;
+  }
+
+  function addClienteIfNew(nome){
+    if(!nome) return;
+    nome = String(nome).trim();
+    if(!nome) return;
+    const clientes = loadClientes();
+    if(!clientes.includes(nome)){
+      clientes.push(nome);
+      clientes.sort((a,b)=> a.localeCompare(b,'pt-BR'));
+      saveToLocalStorageJSON(LS_CLIENTES, clientes);
+      if(typeof window.refreshClientesAutocomplete === 'function') window.refreshClientesAutocomplete();
+    }
+  }
+
+  function renderDropdownMatches(container, matches, highlightIndex=-1){
+    container.innerHTML = '';
+    if(!matches || matches.length === 0){
+      const no = document.createElement('div');
+      no.className = 'no-results';
+      no.textContent = 'Nenhum cliente';
+      container.appendChild(no);
+      return;
+    }
+    matches.forEach((name, i) => {
+      const it = document.createElement('div');
+      it.className = 'client-suggestion';
+      if(i === highlightIndex) it.classList.add('active');
+      it.setAttribute('role','option');
+      it.tabIndex = 0;
+      it.textContent = name;
+      it.addEventListener('mousedown', function(e){
+        e.preventDefault();
+        setInputValue(name);
+        hideDropdown(container);
+        inputEl.focus();
+      });
+      container.appendChild(it);
+    });
+  }
+
+  function filterMatches(list, term){
+    term = String(term||'').trim().toLowerCase();
+    if(!term) return list.slice(0,50);
+    return list.filter(n => n.toLowerCase().includes(term)).slice(0,50);
+  }
+  function showDropdown(container){ container.style.display = ''; }
+  function hideDropdown(container){ container.style.display = 'none'; }
+  function setInputValue(val){ inputEl.value = val; }
+
+  const inputEl = document.getElementById(INPUT_ID);
+  const dropdown = document.getElementById(DROP_ID);
+  if(!inputEl || !dropdown){ console.warn('Autocomplete: elementos não encontrados:', INPUT_ID, DROP_ID); return; }
+
+  let clientesCache = loadClientes();
+  let highlight = -1;
+
+  inputEl.addEventListener('input', (e) => {
+    const term = inputEl.value;
+    clientesCache = loadClientes();
+    const matches = filterMatches(clientesCache, term);
+    highlight = -1;
+    renderDropdownMatches(dropdown, matches, highlight);
+    showDropdown(dropdown);
+  });
+
+  inputEl.addEventListener('focus', (e) => {
+    clientesCache = loadClientes();
+    renderDropdownMatches(dropdown, clientesCache.slice(0,50));
+    showDropdown(dropdown);
+  });
+
+  inputEl.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.client-suggestion');
+    if(!items.length) return;
+    if(e.key === 'ArrowDown'){ e.preventDefault(); highlight = Math.min(highlight + 1, items.length - 1); items.forEach((it, idx) => it.classList.toggle('active', idx === highlight)); items[highlight].scrollIntoView({block:'nearest'}); }
+    else if(e.key === 'ArrowUp'){ e.preventDefault(); highlight = Math.max(highlight - 1, 0); items.forEach((it, idx) => it.classList.toggle('active', idx === highlight)); items[highlight].scrollIntoView({block:'nearest'}); }
+    else if(e.key === 'Enter'){ if(highlight >= 0 && items[highlight]){ e.preventDefault(); const chosen = items[highlight].textContent; setInputValue(chosen); hideDropdown(dropdown); } }
+    else if(e.key === 'Escape'){ hideDropdown(dropdown); }
+  });
+
+  inputEl.addEventListener('blur', ()=>{
+    setTimeout(()=>{
+      const v = inputEl.value && String(inputEl.value).trim();
+      if(v){
+        const clientsNow = loadClientes();
+        if(!clientsNow.includes(v)){
+          addClienteIfNew(v);
+        }
+      }
+      hideDropdown(dropdown);
+    }, 180);
+  });
+
+  document.addEventListener('click', (e)=>{
+    if(!dropdown.contains(e.target) && e.target !== inputEl){
+      hideDropdown(dropdown);
+    }
+  });
+
+  window.refreshClientesAutocomplete = function(){
+    clientesCache = loadClientes();
+  };
+
+  if(inputEl.value && String(inputEl.value).trim()){
+    const matches = filterMatches(clientesCache, inputEl.value);
+    renderDropdownMatches(dropdown, matches);
+  }
+})();

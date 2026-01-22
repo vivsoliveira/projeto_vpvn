@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8"/>
@@ -6,32 +6,97 @@
   <title>Histórico de clientes</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    /* estilos pequenos específicos para a tabela */
-    .hist-container { max-width:980px;margin:28px auto;padding:18px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(16,24,40,0.06); }
-    table { width:100%; border-collapse:collapse; margin-top:12px; }
-    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #eef2ff; }
-    th { background: #f8fafc; font-weight:700; color:#0b1220; }
-    .muted { color:var(--muted); font-size:0.95rem; }
-    .empty { padding:28px; text-align:center; color:var(--muted); }
-    .small { font-size:0.9rem; color:var(--muted); }
-    .back { display:inline-block; margin-bottom:8px; text-decoration:none; color:var(--accent); font-weight:700; }
+    :root { --accent:#1366d6; --muted-2:#6b7280; --card-bg:#ffffff; }
+
+    .hist-wrapper { max-width:1100px; margin:32px auto; padding:28px; background:var(--card-bg); border-radius:14px; box-shadow:0 10px 30px rgba(16,24,40,0.06); }
+    .hist-top { display:flex; align-items:center; gap:14px; margin-bottom:8px; flex-wrap:wrap; }
+    .hist-title { margin:0; font-size:1.2rem; font-weight:800; color:#071033; }
+    .hist-sub { margin:0 0 12px 0; color:var(--muted-2); }
+
+    /* Back buttons - default blue primary */
+    .back {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      text-decoration:none;
+      background:var(--accent);
+      color:white;
+      border-radius:10px;
+      padding:8px 12px;
+      font-weight:700;
+      border:1px solid rgba(19,102,214,0.15);
+      cursor:pointer;
+    }
+    .back.secondary {
+      background:transparent;
+      color:#071033;
+      border:1px solid #e7eefc;
+      font-weight:700;
+      padding:8px 12px;
+      border-radius:10px;
+    }
+
+    /* table */
+    .hist-table-wrap { overflow:auto; border-radius:10px; border:1px solid #eef2ff; margin-top:12px; }
+    table#histTable { width:100%; border-collapse:collapse; min-width:760px; }
+    table#histTable thead th { text-align:left; padding:12px 16px; background:#fbfbff; position:sticky; top:0; z-index:2; font-weight:700; color:#071033; }
+    table#histTable tbody td { padding:14px 16px; border-top:1px solid #f3f6fb; color:#0b1220; }
+    table#histTable tbody tr:hover td { background:#fcfdff; }
+    table#histTable tfoot td { padding:12px 16px; background:#f8fafc; font-weight:800; }
+
+    .muted { color:var(--muted-2); }
+    .empty { padding:32px; text-align:center; color:var(--muted-2); }
+
+    /* overdue highlight */
+    .overdue td, .overdue { color:#c02626 !important; background:transparent; }
+
+    /* blue "Ver" button (link-like) */
+    .btn-view { background:transparent; color:var(--accent); border:none; text-decoration:underline; cursor:pointer; font-weight:700; padding:6px 8px; }
+
+    .op-card { margin-top:14px; padding:12px; border-radius:10px; background:#fbfdff; border:1px solid #eef6ff; }
+    .btn-plain { background:transparent; border:1px solid #e6eefc; padding:6px 10px; border-radius:8px; cursor:pointer; }
+
+    @media (max-width:720px) {
+      .hist-wrapper { padding:16px; margin:18px; }
+      table#histTable thead th, table#histTable tbody td { padding:10px 8px; }
+    }
   </style>
 </head>
 <body>
-  <div class="hist-container">
-    <a class="back" href="index.html">← Voltar</a>
-    <h1>Histórico de clientes</h1>
-    <p class="muted">Lista com nome social e próxima parcela a ser cobrada (base: datas das parcelas quando disponíveis).</p>
+  <div class="hist-wrapper" role="main">
+    <div class="hist-top">
+      <a class="back" href="index.html" title="Voltar para página inicial">← Voltar</a>
+      <h1 class="hist-title">Histórico de clientes</h1>
+    </div>
 
-    <div id="loading" class="small">Carregando...</div>
-    <div id="tableWrap" style="display:none;">
+    <p class="hist-sub">Lista com nome social e próxima parcela a ser cobrada. Clique em "Ver" para abrir todas as operações desse cliente abaixo (sem abrir nova aba).</p>
+
+    <div id="loading" class="muted">Carregando...</div>
+
+    <div id="tableWrap" class="hist-table-wrap" style="display:none;">
       <table id="histTable" aria-live="polite">
         <thead>
-          <tr><th>Nome social</th><th>Próxima parcela</th><th>Detalhes</th></tr>
+          <tr>
+            <th>Nome social</th>
+            <th>Próxima parcela</th>
+            <th>Valor próxima parcela</th>
+            <th>Valor TOTAL da(s) operação(ões)</th>
+            <th>Detalhes</th>
+          </tr>
         </thead>
         <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">Total do devedor</td>
+            <td id="totalDevedor" style="text-align:right">R$ 0,00</td>
+            <td></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
+
+    <!-- container onde os detalhes do cliente aparecem IN-LINE (mesma aba) -->
+    <div id="clientDetails" style="display:none; margin-top:24px;"></div>
 
     <div id="empty" class="empty" style="display:none;">Nenhuma operação encontrada.</div>
   </div>
