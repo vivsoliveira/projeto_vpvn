@@ -42,15 +42,3 @@ function setCurrentYear() {
   }
 }
 
-/**
- * Botão "Histórico de clientes" (ainda não disponível)
- */
-function setupDisabledButton() {
-  const histBtn = document.getElementById('histBtn');
-  if (!histBtn) return;
-
-  histBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    alert('Histórico de clientes ainda está em desenvolvimento 🚧');
-  });
-}

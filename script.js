@@ -204,7 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const body = await resp.json();
-      alert('Operação salva! id = ' + body.id);
       console.log('Operação salva:', body, payload);
       // opcional: redirecionar ou limpar formulário
       // resetForm();

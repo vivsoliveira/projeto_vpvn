@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Histórico de clientes</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* estilos pequenos específicos para a tabela */
+    .hist-container { max-width:980px;margin:28px auto;padding:18px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(16,24,40,0.06); }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #eef2ff; }
+    th { background: #f8fafc; font-weight:700; color:#0b1220; }
+    .muted { color:var(--muted); font-size:0.95rem; }
+    .empty { padding:28px; text-align:center; color:var(--muted); }
+    .small { font-size:0.9rem; color:var(--muted); }
+    .back { display:inline-block; margin-bottom:8px; text-decoration:none; color:var(--accent); font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="hist-container">
+    <a class="back" href="index.html">← Voltar</a>
+    <h1>Histórico de clientes</h1>
+    <p class="muted">Lista com nome social e próxima parcela a ser cobrada (base: datas das parcelas quando disponíveis).</p>
+
+    <div id="loading" class="small">Carregando...</div>
+    <div id="tableWrap" style="display:none;">
+      <table id="histTable" aria-live="polite">
+        <thead>
+          <tr><th>Nome social</th><th>Próxima parcela</th><th>Detalhes</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="empty" class="empty" style="display:none;">Nenhuma operação encontrada.</div>
+  </div>
+
+  <script src="historico.js" defer></script>
+</body>
+</html>
