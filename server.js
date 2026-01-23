@@ -1,109 +1,107 @@
-// server.js
+// server.js - SQLite version
 require('dotenv').config();
 const express = require('express');
-const mysql = require('mysql2/promise');
+const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const app = express();
 app.use(helmet());
 app.use(express.json());
 
-// CORS: prefira configurar CORS_ORIGIN no env; para dev pode usar '*'
+// CORS
 const corsOrigin = process.env.CORS_ORIGIN || '*';
 app.use(cors({ origin: corsOrigin }));
 
-// Rate limiter básico
+// Rate limiter
 const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minuto
-  max: parseInt(process.env.RATE_LIMIT_MAX || '60', 10), // requests por IP
+  windowMs: 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX || '60', 10),
 });
 app.use(limiter);
 
-// Pool de conexões (credenciais via env vars)
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: parseInt(process.env.DB_CONN_LIMIT || '10', 10),
-  queueLimit: 0
+// SQLite database
+const dbPath = path.join(__dirname, 'operacoes.db');
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error('Erro ao abrir banco:', err);
+    process.exit(1);
+  }
+  console.log('✓ SQLite conectado');
+  initDB();
 });
+
+function initDB() {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS operacoes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome_social TEXT NOT NULL,
+      data_json LONGTEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) console.error('Erro ao criar tabela:', err);
+    else console.log('✓ Tabela operacoes pronta');
+  });
+}
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
-// POST /api/operacoes  -> salva operação (body: JSON com estrutura do seu "out")
-app.post('/api/operacoes', async (req, res) => {
-  try {
-    const out = req.body;
-    if (!out || !out.nomeSocial) {
-      return res.status(400).json({ error: 'Dados inválidos: campo nomeSocial obrigatório' });
+// Serve arquivos estáticos (HTML, CSS, JS)
+app.use(express.static(__dirname));
+
+// GET /api/operacoes
+app.get('/api/operacoes', (req, res) => {
+  db.all('SELECT * FROM operacoes ORDER BY created_at DESC', (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows || []);
+  });
+});
+
+// POST /api/operacoes
+app.post('/api/operacoes', (req, res) => {
+  const out = req.body;
+  if (!out || !out.nomeSocial) {
+    return res.status(400).json({ error: 'Campo nomeSocial obrigatório' });
+  }
+
+  db.run(
+    'INSERT INTO operacoes (nome_social, data_json) VALUES (?, ?)',
+    [out.nomeSocial, JSON.stringify(out)],
+    function(err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id: this.lastID });
     }
-
-    const sql = 'INSERT INTO operacoes (nome_social, data_json) VALUES (?, ?)';
-    const [result] = await pool.query(sql, [out.nomeSocial, JSON.stringify(out)]);
-    return res.status(201).json({ id: result.insertId });
-  } catch (err) {
-    console.error('POST /api/operacoes error:', err);
-    return res.status(500).json({ error: 'Erro interno no servidor' });
-  }
+  );
 });
 
-// GET /api/operacoes -> lista últimas operações (limit configurable via query ?limit=50)
-app.get('/api/operacoes', async (req, res) => {
-  try {
-    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit || '100', 10)));
-    const [rows] = await pool.query(
-      'SELECT id, nome_social, data_json, created_at FROM operacoes ORDER BY created_at DESC LIMIT ?',
-      [limit]
-    );
-    const parsed = rows.map(r => {
-      let parsedData = null;
-      try { parsedData = JSON.parse(r.data_json); } catch (e) { parsedData = r.data_json; }
-      return { id: r.id, nome_social: r.nome_social, data: parsedData, created_at: r.created_at };
-    });
-    res.json(parsed);
-  } catch (err) {
-    console.error('GET /api/operacoes error:', err);
-    res.status(500).json({ error: 'Erro ao buscar operações' });
-  }
+// DELETE /api/operacoes/:id
+app.delete('/api/operacoes/:id', (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+
+  db.run('DELETE FROM operacoes WHERE id = ?', [id], function(err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ deleted: this.changes });
+  });
 });
 
-// Opcional: endpoint para buscar uma operação por id
-app.get('/api/operacoes/:id', async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT id, nome_social, data_json, created_at FROM operacoes WHERE id = ? LIMIT 1', [req.params.id]);
-    if (!rows || rows.length === 0) return res.status(404).json({ error: 'Não encontrado' });
-    const r = rows[0];
-    let parsedData = null;
-    try { parsedData = JSON.parse(r.data_json); } catch (e) { parsedData = r.data_json; }
-    res.json({ id: r.id, nome_social: r.nome_social, data: parsedData, created_at: r.created_at });
-  } catch (err) {
-    console.error('GET /api/operacoes/:id error:', err);
-    res.status(500).json({ error: 'Erro ao buscar' });
-  }
+// Servir index.html para rotas não-API
+app.get(['/', '/dados.html', '/historico.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// DELETE /api/operacoes/:id -> deleta uma operação por id
-app.delete('/api/operacoes/:id', async (req, res) => {
-  try {
-    const [result] = await pool.query('DELETE FROM operacoes WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Operação não encontrada' });
-    }
-    res.json({ message: 'Operação deletada com sucesso', id: req.params.id });
-  } catch (err) {
-    console.error('DELETE /api/operacoes/:id error:', err);
-    res.status(500).json({ error: 'Erro ao deletar operação' });
-  }
-});
-
-// Start
 const PORT = parseInt(process.env.PORT || '3000', 10);
 app.listen(PORT, () => {
-  console.log(`API operacoes rodando na porta ${PORT} (CORS_ORIGIN=${corsOrigin})`);
+  console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+});
+
+process.on('SIGINT', () => {
+  db.close((err) => {
+    if (err) console.error('Erro ao fechar banco:', err);
+    process.exit(0);
+  });
 });
