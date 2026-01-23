@@ -6,66 +6,71 @@
   <title>Histórico de clientes</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    :root { --accent:#1366d6; --muted-2:#6b7280; --card-bg:#ffffff; }
+    :root { --accent:#1366d6; --muted-2:#6b7280; --card-bg:#ffffff; --danger:#c02626; }
 
     .hist-wrapper { max-width:1100px; margin:32px auto; padding:28px; background:var(--card-bg); border-radius:14px; box-shadow:0 10px 30px rgba(16,24,40,0.06); }
     .hist-top { display:flex; align-items:center; gap:14px; margin-bottom:8px; flex-wrap:wrap; }
     .hist-title { margin:0; font-size:1.2rem; font-weight:800; color:#071033; }
     .hist-sub { margin:0 0 12px 0; color:var(--muted-2); }
 
-    /* Back buttons - default blue primary */
-    .back {
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      text-decoration:none;
-      background:var(--accent);
-      color:white;
-      border-radius:10px;
-      padding:8px 12px;
-      font-weight:700;
-      border:1px solid rgba(19,102,214,0.15);
-      cursor:pointer;
-    }
-    .back.secondary {
-      background:transparent;
-      color:#071033;
-      border:1px solid #e7eefc;
-      font-weight:700;
-      padding:8px 12px;
-      border-radius:10px;
-    }
+    .back { display:inline-flex; align-items:center; gap:8px; text-decoration:none; background:var(--accent); color:white; border-radius:10px; padding:8px 12px; font-weight:700; border:1px solid rgba(19,102,214,0.15); cursor:pointer; }
+    .back.secondary { background:transparent; color:#071033; border:1px solid #e7eefc; font-weight:700; padding:8px 12px; border-radius:10px; }
 
-    /* table */
     .hist-table-wrap { overflow:auto; border-radius:10px; border:1px solid #eef2ff; margin-top:12px; }
     table#histTable { width:100%; border-collapse:collapse; min-width:760px; }
     table#histTable thead th { text-align:left; padding:12px 16px; background:#fbfbff; position:sticky; top:0; z-index:2; font-weight:700; color:#071033; }
-    table#histTable tbody td { padding:14px 16px; border-top:1px solid #f3f6fb; color:#0b1220; }
+    table#histTable tbody td { padding:14px 16px; border-top:1px solid #f3f6fb; color:#0b1220; vertical-align:middle; }
     table#histTable tbody tr:hover td { background:#fcfdff; }
     table#histTable tfoot td { padding:12px 16px; background:#f8fafc; font-weight:800; }
 
     .muted { color:var(--muted-2); }
     .empty { padding:32px; text-align:center; color:var(--muted-2); }
 
-    /* overdue highlight */
-    .overdue td, .overdue { color:#c02626 !important; background:transparent; }
-
-    /* blue "Ver" button (link-like) */
     .btn-view { background:transparent; color:var(--accent); border:none; text-decoration:underline; cursor:pointer; font-weight:700; padding:6px 8px; }
+
+    /* coluna excluir (link) */
+    .delete-link {
+      color: var(--danger);
+      text-decoration: underline;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      padding: 0 6px;
+    }
 
     .op-card { margin-top:14px; padding:12px; border-radius:10px; background:#fbfdff; border:1px solid #eef6ff; }
     .btn-plain { background:transparent; border:1px solid #e6eefc; padding:6px 10px; border-radius:8px; cursor:pointer; }
+
+    /* total separado (fora da tabela) */
+    .total-summary {
+      margin-top:12px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      font-weight:800;
+      color:#071033;
+    }
+    .total-summary .amount {
+      color: var(--danger);
+      font-weight:900;
+      margin-left:6px;
+    }
 
     @media (max-width:720px) {
       .hist-wrapper { padding:16px; margin:18px; }
       table#histTable thead th, table#histTable tbody td { padding:10px 8px; }
     }
+
+    /* overdue parcels */
+    .overdue td, .overdue { color:var(--danger) !important; font-weight:700; }
   </style>
 </head>
 <body>
   <div class="hist-wrapper" role="main">
     <div class="hist-top">
       <a class="back" href="index.html" title="Voltar para página inicial">← Voltar</a>
+      <a class="back secondary" href="dados.html" title="Voltar para preenchimento">↩ Voltar para preenchimento</a>
       <h1 class="hist-title">Histórico de clientes</h1>
     </div>
 
@@ -80,18 +85,13 @@
             <th>Nome social</th>
             <th>Próxima parcela</th>
             <th>Valor próxima parcela</th>
-            <th>Valor TOTAL da(s) operação(ões)</th>
+            <th>Valor total da(s) operação(ões)</th>
             <th>Detalhes</th>
+            <!-- coluna sem título para botão Excluir -->
+            <th style="width:110px"></th>
           </tr>
         </thead>
         <tbody></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3">Total do devedor</td>
-            <td id="totalDevedor" style="text-align:right">R$ 0,00</td>
-            <td></td>
-          </tr>
-        </tfoot>
       </table>
     </div>
 

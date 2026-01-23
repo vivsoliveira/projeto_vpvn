@@ -88,6 +88,20 @@ app.get('/api/operacoes/:id', async (req, res) => {
   }
 });
 
+// DELETE /api/operacoes/:id -> deleta uma operação por id
+app.delete('/api/operacoes/:id', async (req, res) => {
+  try {
+    const [result] = await pool.query('DELETE FROM operacoes WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Operação não encontrada' });
+    }
+    res.json({ message: 'Operação deletada com sucesso', id: req.params.id });
+  } catch (err) {
+    console.error('DELETE /api/operacoes/:id error:', err);
+    res.status(500).json({ error: 'Erro ao deletar operação' });
+  }
+});
+
 // Start
 const PORT = parseInt(process.env.PORT || '3000', 10);
 app.listen(PORT, () => {
