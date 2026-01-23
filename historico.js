@@ -67,6 +67,13 @@ async function fetchOperacoes(){
     const totalFromParcelas = op.parcelas.reduce((s,p)=> s + Number(p.entrada || 0), 0);
     op.valorTotal = Number(raw.valorTotal || raw.total || raw.amountTotal || raw.totalValue || totalFromParcelas) || totalFromParcelas || 0;
 
+    // taxa mensal: tente vários campos
+    op.taxaMensalPct = raw.taxaMensalPct || raw.taxa || raw.taxa_mensal || raw.data?.taxaMensalPct || raw.data?.taxa || raw.data?.taxa_mensal || null;
+    if(op.taxaMensalPct !== null) {
+      op.taxaMensalPct = Number(op.taxaMensalPct);
+      if(isNaN(op.taxaMensalPct)) op.taxaMensalPct = null;
+    }
+
     // id se existir
     op.id = raw.id || raw._id || raw.uuid || raw.code || null;
 
@@ -222,6 +229,54 @@ function groupByCliente(ops){
   return map;
 }
 
+// Calcula o total de um cliente, excluindo parcelas pagas
+function calcularTotalCliente(ops){
+  let total = 0;
+  ops.forEach(op => {
+    if(Array.isArray(op.parcelas) && op.parcelas.length){
+      op.parcelas.forEach((p, i) => {
+        // Verificar se a parcela foi marcada como paga (no localStorage)
+        const isPaga = isParcelaPaga(op.id, i);
+        // Se a parcela não está marcada como paga, adiciona ao total
+        if(!isPaga){
+          total += Number(p.entrada || 0);
+        }
+      });
+    } else {
+      total += op.valorTotal || 0;
+    }
+  });
+  return total;
+}
+
+// Verifica se uma parcela específica foi marcada como paga
+function isParcelaPaga(operacaoId, parcelaIndex){
+  const pagasJson = localStorage.getItem('parcelas_pagas') || '{}';
+  try {
+    const pagas = JSON.parse(pagasJson);
+    return pagas[`${operacaoId}_${parcelaIndex}`] === true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// Marca/desmarca uma parcela como paga
+function marcarParcelaComoPaga(operacaoId, parcelaIndex, isPaga){
+  const pagasJson = localStorage.getItem('parcelas_pagas') || '{}';
+  let pagas = {};
+  try {
+    pagas = JSON.parse(pagasJson);
+  } catch(e) {}
+  
+  const key = `${operacaoId}_${parcelaIndex}`;
+  if(isPaga) {
+    pagas[key] = true;
+  } else {
+    delete pagas[key];
+  }
+  localStorage.setItem('parcelas_pagas', JSON.stringify(pagas));
+}
+
 function renderClientsTable(grouped){
   const tbody = document.querySelector('#histTable tbody');
   tbody.innerHTML = '';
@@ -244,14 +299,9 @@ function renderClientsTable(grouped){
   for(const [nome, ops] of entries){
     let clienteNextDate = null;
     let clienteNextValue = 0;
-    let clienteTotal = 0;
+    let clienteTotal = calcularTotalCliente(ops);
 
     ops.forEach(op => {
-      const totalOp = Array.isArray(op.parcelas) && op.parcelas.length
-        ? op.parcelas.reduce((s,p)=>s + Number(p.entrada || p.pv || 0),0)
-        : (op.valorTotal || 0);
-      clienteTotal += totalOp;
-
       const prm = (Array.isArray(op.parcelas) && op.parcelas.length) ? op.parcelas.slice().sort((a,b)=> (a.data||'').localeCompare(b.data||'')) : [];
       let chosen = null;
       const hoje = new Date().toISOString().slice(0,10);
@@ -287,21 +337,7 @@ function renderClientsTable(grouped){
     btnView.addEventListener('click', ()=> openClientDetails(nome, ops));
     tdDetails.appendChild(btnView);
 
-    const tdDelete = document.createElement('td');
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete-link';
-    delBtn.textContent = 'Excluir';
-    delBtn.title = 'Abrir detalhes para excluir operação';
-    delBtn.addEventListener('click', ()=> {
-      openClientDetails(nome, ops);
-      setTimeout(()=> {
-        const clientDetails = document.getElementById('clientDetails');
-        if(clientDetails) clientDetails.scrollIntoView({behavior:'smooth', block:'center'});
-      }, 200);
-    });
-    tdDelete.appendChild(delBtn);
-
-    tr.appendChild(tdNome); tr.appendChild(tdNext); tr.appendChild(tdNextVal); tr.appendChild(tdTotal); tr.appendChild(tdDetails); tr.appendChild(tdDelete);
+    tr.appendChild(tdNome); tr.appendChild(tdNext); tr.appendChild(tdNextVal); tr.appendChild(tdTotal); tr.appendChild(tdDetails);
     tbody.appendChild(tr);
   }
 
@@ -411,10 +447,9 @@ function openClientDetails(nome, ops){
   h2.style.marginTop = '0';
   wrapper.appendChild(h2);
 
-  const subtitle = document.createElement('p');
-  subtitle.className = 'muted';
-  subtitle.textContent = `Operações registradas para ${nome}. Clique em "Excluir" na linha da parcela para remover.`;
-  wrapper.appendChild(subtitle);
+  const operacionsContainer = document.createElement('div');
+  operacionsContainer.id = 'operacionsContainer_' + nome.replace(/\s+/g, '_');
+  wrapper.appendChild(operacionsContainer);
 
   // lista de operações (cada uma em seu sub-card)
   ops.forEach(op => {
@@ -435,9 +470,23 @@ function openClientDetails(nome, ops){
     head.appendChild(title);
 
     const actions = document.createElement('div');
+    const btnClose = document.createElement('button');
+    btnClose.className = 'close-link';
+    btnClose.textContent = 'Fechar';
+    btnClose.addEventListener('click', ()=> {
+      opWrap.remove();
+      // Verificar se não há mais operações
+      const operacionsContainer = document.getElementById('operacionsContainer_' + nome.replace(/\s+/g, '_'));
+      if(operacionsContainer && operacionsContainer.children.length === 0){
+        // Se não há mais operações, esconder o título
+        h2.style.display = 'none';
+      }
+    });
+    actions.appendChild(btnClose);
+    
     const btnDeleteOp = document.createElement('button');
     btnDeleteOp.className = 'delete-link';
-    btnDeleteOp.textContent = 'Excluir operação';
+    btnDeleteOp.textContent = 'Excluir';
     btnDeleteOp.addEventListener('click', ()=> deleteOperation(op));
     actions.appendChild(btnDeleteOp);
     head.appendChild(actions);
@@ -450,30 +499,82 @@ function openClientDetails(nome, ops){
     table.style.borderCollapse = 'collapse';
     table.style.marginTop = '8px';
     const thead = document.createElement('thead');
-    thead.innerHTML = `<tr><th>Data</th><th>Entrada</th><th>PV</th></tr>`;
+    thead.innerHTML = `<tr><th>Data</th><th>Entrada</th><th>VP</th><th>Paga</th></tr>`;
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
     const parcelas = Array.isArray(op.parcelas) ? op.parcelas : [];
     const today = new Date().toISOString().slice(0,10);
     if(parcelas.length){
-      parcelas.forEach(p => {
+      parcelas.forEach((p, parcelaIndex) => {
         const tr = document.createElement('tr');
         const isOver = p && p.data && (p.data < today);
         if(isOver) tr.classList.add('overdue');
+        
+        // criar checkbox para marcar como paga
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.style.cursor = 'pointer';
+        checkbox.style.marginRight = '8px';
+        checkbox.style.width = '18px';
+        checkbox.style.height = '18px';
+        // Se já estava marcado como paga, manter o estado
+        checkbox.checked = isParcelaPaga(op.id, parcelaIndex);
+        
+        // criar elemento para mostrar SIM/NÃO
+        const statusSpan = document.createElement('span');
+        statusSpan.style.fontWeight = '700';
+        const updateStatus = () => {
+          if(checkbox.checked) {
+            statusSpan.textContent = 'SIM';
+            statusSpan.style.color = '#10b981';
+          } else {
+            statusSpan.textContent = 'NÃO';
+            statusSpan.style.color = '#000';
+          }
+        };
+        updateStatus();
+        checkbox.addEventListener('change', () => {
+          // Armazenar o estado no localStorage
+          marcarParcelaComoPaga(op.id, parcelaIndex, checkbox.checked);
+          updateStatus();
+          // Recalcular o total na tabela principal (sem recarregar tudo)
+          const tbody = document.querySelector('#histTable tbody');
+          if(tbody){
+            // Encontrar a linha do cliente e atualizar seu total
+            const rows = tbody.querySelectorAll('tr');
+            rows.forEach(row => {
+              const cells = row.querySelectorAll('td');
+              if(cells.length > 0 && cells[0].textContent.trim() === nome){
+                // Atualizar o total desta linha
+                const newTotal = calcularTotalCliente(ops);
+                cells[3].innerHTML = `<strong>${formatCurrency(newTotal)}</strong>`;
+              }
+            });
+          }
+        });
+        
+        const pagaCell = document.createElement('td');
+        pagaCell.style.padding = '8px';
+        pagaCell.style.display = 'flex';
+        pagaCell.style.alignItems = 'center';
+        pagaCell.appendChild(checkbox);
+        pagaCell.appendChild(statusSpan);
+        
         tr.innerHTML = `<td style="padding:8px">${p.data || '—'}</td>
                         <td style="padding:8px">${formatCurrency(Number(p.entrada || p.vp || p.valor || 0))}</td>
                         <td style="padding:8px">${formatCurrency(Number(p.pv || 0))}</td>`;
+        tr.appendChild(pagaCell);
         tbody.appendChild(tr);
       });
     } else {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td colspan="3" class="muted" style="padding:8px">Sem parcelas registradas</td>`;
+      tr.innerHTML = `<td colspan="4" class="muted" style="padding:8px">Sem parcelas registradas</td>`;
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);
     opWrap.appendChild(table);
-    wrapper.appendChild(opWrap);
+    operacionsContainer.appendChild(opWrap);
   });
 
   // botão fechar detail
@@ -574,6 +675,21 @@ async function loadHistorico(){
 
 document.addEventListener('DOMContentLoaded', () => {
   loadHistorico();
-  // Auto-refresh a cada 5 segundos
-  setInterval(loadHistorico, 5000);
+  // Verificar mudanças a cada 2 segundos (mais rápido, menos intrusivo)
+  let ultimoHash = null;
+  setInterval(async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/operacoes?limit=1000');
+      const data = await res.json();
+      const novoHash = JSON.stringify(data).split('').reduce((a,b) => ((a << 5) - a) + b.charCodeAt(0), 0);
+      
+      // Se o hash mudou, a página foi atualizada (novos registros, deletados, etc)
+      if(ultimoHash !== null && ultimoHash !== novoHash){
+        loadHistorico();
+      }
+      ultimoHash = novoHash;
+    } catch(err) {
+      // Silenciosamente ignorar erros de conexão temporários
+    }
+  }, 2000);
 });

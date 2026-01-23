@@ -6,9 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setupDisabledButton();
 });
 
-/**
- * Efeito de digitação para o título "Olá!"
- */
 function typingEffect() {
   const text = 'Olá, seja bem vindo!';
   const typingArea = document.getElementById('typingArea');
@@ -23,7 +20,7 @@ function typingEffect() {
     if (index < text.length) {
       typingArea.textContent += text.charAt(index);
       index++;
-      const delay = 80 + Math.random() * 20; // efeito natural
+      const delay = 70 + Math.random() * 20; // efeito natural
       setTimeout(typeNextChar, delay);
     }
   }

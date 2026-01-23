@@ -540,12 +540,29 @@ function hideSaveModal(){
     return Array.from(set);
   }
 
-  function loadClientes(){
-    let clientes = getFromLocalStorageJSON(LS_CLIENTES) || [];
-    if(!Array.isArray(clientes) || clientes.length === 0){
-      clientes = extractNamesFromOperacoes();
-      saveToLocalStorageJSON(LS_CLIENTES, clientes);
+  async function loadClientes(){
+    let clientes = [];
+    
+    // Sempre buscar do banco de dados (fonte de verdade)
+    try {
+      const res = await fetch('http://localhost:3000/api/operacoes?limit=1000');
+      if(res.ok){
+        const ops = await res.json();
+        if(Array.isArray(ops)){
+          const set = new Set();
+          ops.forEach(o => {
+            const n = (o && (o.nome_social || o.nomeSocial)) || null;
+            if(n && String(n).trim()) set.add(String(n).trim());
+          });
+          clientes = Array.from(set);
+        }
+      }
+    } catch(err) {
+      console.warn('Não foi possível buscar clientes do banco');
+      clientes = [];
     }
+    
+    // Ordenar
     clientes = Array.from(new Set(clientes.map(c => String(c).trim()).filter(Boolean)));
     clientes.sort((a,b)=> a.localeCompare(b,'pt-BR'));
     return clientes;
@@ -603,20 +620,25 @@ function hideSaveModal(){
   const dropdown = document.getElementById(DROP_ID);
   if(!inputEl || !dropdown){ console.warn('Autocomplete: elementos não encontrados:', INPUT_ID, DROP_ID); return; }
 
-  let clientesCache = loadClientes();
+  let clientesCache = [];
   let highlight = -1;
+  
+  // Carregar clientes na inicialização
+  (async () => {
+    clientesCache = await loadClientes();
+  })();
 
-  inputEl.addEventListener('input', (e) => {
+  inputEl.addEventListener('input', async (e) => {
     const term = inputEl.value;
-    clientesCache = loadClientes();
+    clientesCache = await loadClientes();
     const matches = filterMatches(clientesCache, term);
     highlight = -1;
     renderDropdownMatches(dropdown, matches, highlight);
     showDropdown(dropdown);
   });
 
-  inputEl.addEventListener('focus', (e) => {
-    clientesCache = loadClientes();
+  inputEl.addEventListener('focus', async (e) => {
+    clientesCache = await loadClientes();
     renderDropdownMatches(dropdown, clientesCache.slice(0,50));
     showDropdown(dropdown);
   });
@@ -631,10 +653,10 @@ function hideSaveModal(){
   });
 
   inputEl.addEventListener('blur', ()=>{
-    setTimeout(()=>{
+    setTimeout(async ()=>{
       const v = inputEl.value && String(inputEl.value).trim();
       if(v){
-        const clientsNow = loadClientes();
+        const clientsNow = await loadClientes();
         if(!clientsNow.includes(v)){
           addClienteIfNew(v);
         }
@@ -649,8 +671,8 @@ function hideSaveModal(){
     }
   });
 
-  window.refreshClientesAutocomplete = function(){
-    clientesCache = loadClientes();
+  window.refreshClientesAutocomplete = async function(){
+    clientesCache = await loadClientes();
   };
 
   if(inputEl.value && String(inputEl.value).trim()){
